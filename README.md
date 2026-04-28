@@ -159,7 +159,8 @@ Flags:
                                       2. env var GITLEAKS_CONFIG
                                       3. env var GITLEAKS_CONFIG_TOML with the file content
                                       4. (target path)/.gitleaks.toml
-                                      If none of the four options are used, then gitleaks will use the default config
+                                      5. (target path)/pyproject.toml under [tool.gitleaks]
+                                      If none of the five options are used, then gitleaks will use the default config
       --diagnostics string            enable diagnostics (http OR comma-separated list: cpu,mem,trace). cpu=CPU prof, mem=memory prof, trace=exec tracing, http=serve via net/http/pprof
       --diagnostics-dir string        directory to store diagnostics output files when not using http mode (defaults to current directory)
       --enable-rule strings           only enable specific rules by id
@@ -169,12 +170,12 @@ Flags:
       --ignore-gitleaks-allow         ignore gitleaks:allow comments
   -l, --log-level string              log level (trace, debug, info, warn, error, fatal) (default "info")
       --max-archive-depth int         allow scanning into nested archives up to this depth (default "0", no archive traversal is done)
-      --max-decode-depth int          allow recursive decoding up to this depth (default "0", no decoding is done)
+      --max-decode-depth int          allow recursive decoding up to this depth (set to 0 to disable) (default 5)
       --max-target-megabytes int      files larger than this will be skipped
       --no-banner                     suppress banner
       --no-color                      turn off color for verbose output
       --redact uint[=100]             redact secrets from logs and stdout. To redact only parts of the secret just apply a percent value from 0..100. For example --redact=20 (default 100%)
-  -f, --report-format string          output format (json, csv, junit, sarif, template)
+  -f, --report-format string          output format (json, csv, junit, sarif, gitlab-code-quality, template)
   -r, --report-path string            report file
       --report-template string        template file used to generate the report (implies --report-format=template)
       --timeout int                   set a timeout for gitleaks commands in seconds (default "0", no timeout is set)
@@ -253,8 +254,19 @@ The order of precedence is:
       ```bash
       gitleaks git .
       ```
+5. A `pyproject.toml` file within the target path with a `[tool.gitleaks]` table:
+      ```toml
+      [tool.gitleaks]
+      title = "Python project Gitleaks configuration"
 
-If none of the four options are used, then gitleaks will use the default config.
+      [[tool.gitleaks.rules]]
+      id = "custom-rule"
+      description = "Custom project rule"
+      regex = '''custom_secret_[a-z]{24}'''
+      keywords = ["custom"]
+      ```
+
+If none of the five options are used, then gitleaks will use the default config.
 
 ## Configuration
 
@@ -522,9 +534,10 @@ You can ignore specific findings by creating a `.gitleaksignore` file at the roo
 #### Decoding
 
 Sometimes secrets are encoded in a way that can make them difficult to find
-with just regex. Now you can tell gitleaks to automatically find and decode
-encoded text. The flag `--max-decode-depth` enables this feature (the default
-value "0" means the feature is disabled by default).
+with just regex. Gitleaks automatically finds and decodes encoded text up to
+the recursion limit set by `--max-decode-depth`. The default is `5`; set
+`--max-decode-depth=0` to disable decoding for scans where runtime or memory
+use must be minimized.
 
 Recursive decoding is supported since decoded text can also contain encoded
 text.  The flag `--max-decode-depth` sets the recursion limit. Recursion stops
@@ -589,7 +602,21 @@ are supported.
 
 #### Reporting
 
-Gitleaks has built-in support for several report formats: [`json`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/json_simple.json), [`csv`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/csv_simple.csv?plain=1), [`junit`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/junit_simple.xml), and [`sarif`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/sarif_simple.sarif).
+Gitleaks has built-in support for several report formats: [`json`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/json_simple.json), [`csv`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/csv_simple.csv?plain=1), [`junit`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/junit_simple.xml), [`sarif`](https://github.com/gitleaks/gitleaks/blob/master/testdata/expected/report/sarif_simple.sarif), and `gitlab-code-quality`.
+
+GitLab Code Quality output can be used as a GitLab CI artifact:
+
+```sh
+gitleaks git \
+  --redact=100 \
+  --report-format gitlab-code-quality \
+  --report-path gl-code-quality-report.json \
+  .
+```
+
+The alias `gcq` is also accepted. The GitLab Code Quality report intentionally
+emits only Code Quality fields and does not include raw `Secret` or `Match`
+values.
 
 If none of these formats fit your need, you can create your own report format with a [Go `text/template` .tmpl file](https://www.digitalocean.com/community/tutorials/how-to-use-templates-in-go#step-4-writing-a-template) and the `--report-template` flag. The template can use [extended functionality from the `Masterminds/sprig` template library](https://masterminds.github.io/sprig/).
 
