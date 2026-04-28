@@ -32,6 +32,23 @@
 [![GoReportCard][go-report-card-badge]][go-report-card]
 [![License][badge-license]][license]
 
+## About This Fork
+
+This fork keeps the upstream Gitleaks scanning engine intact and adds a small set
+of production-focused integrations for teams using GitLab CI and Python project
+tooling.
+
+Compared with upstream Gitleaks, this branch adds:
+
+- GitLab Code Quality output through `--report-format gitlab-code-quality` and
+  the shorter `gcq` alias.
+- Project-relative GitLab report paths and fingerprints for stable CI output.
+- `pyproject.toml` config discovery using `[tool.gitleaks]`, after
+  `.gitleaks.toml` and before the default config.
+- Documentation updates for report formats, config precedence, and the current
+  `--max-decode-depth` default.
+- A synthetic decode-depth benchmark for repeatable performance investigation.
+
 Gitleaks is a tool for **detecting** secrets like passwords, API keys, and tokens in git repos, files, and whatever else you wanna throw at it via `stdin`. If you wanna learn more about how the detection engine works check out this blog: [Regex is (almost) all you need](https://lookingatcomputer.substack.com/p/regex-is-almost-all-you-need).
 
 ```
