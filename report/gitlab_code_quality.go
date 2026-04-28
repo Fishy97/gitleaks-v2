@@ -10,7 +10,9 @@ import (
 
 const gitLabCodeQualitySeverity = "critical"
 
-type GitLabCodeQualityReporter struct{}
+type GitLabCodeQualityReporter struct {
+	BasePath string
+}
 
 var _ Reporter = (*GitLabCodeQualityReporter)(nil)
 
@@ -34,7 +36,7 @@ type GitLabCodeQualityLineMap struct {
 func (r *GitLabCodeQualityReporter) Write(w io.WriteCloser, findings []Finding) error {
 	issues := make([]GitLabCodeQualityIssue, 0, len(findings))
 	for _, finding := range findings {
-		issues = append(issues, newGitLabCodeQualityIssue(finding))
+		issues = append(issues, newGitLabCodeQualityIssue(finding, r.BasePath))
 	}
 
 	encoder := json.NewEncoder(w)
@@ -42,8 +44,8 @@ func (r *GitLabCodeQualityReporter) Write(w io.WriteCloser, findings []Finding) 
 	return encoder.Encode(issues)
 }
 
-func newGitLabCodeQualityIssue(f Finding) GitLabCodeQualityIssue {
-	path := gitLabCodeQualityPath(f)
+func newGitLabCodeQualityIssue(f Finding, basePath string) GitLabCodeQualityIssue {
+	path := gitLabCodeQualityPath(f, basePath)
 	line := gitLabCodeQualityLine(f)
 	return GitLabCodeQualityIssue{
 		Description: fmt.Sprintf("Secret detected by Gitleaks rule: %s", f.RuleID),
@@ -59,13 +61,38 @@ func newGitLabCodeQualityIssue(f Finding) GitLabCodeQualityIssue {
 	}
 }
 
-func gitLabCodeQualityPath(f Finding) string {
+func gitLabCodeQualityPath(f Finding, basePath string) string {
 	path := f.File
 	if f.SymlinkFile != "" {
 		path = f.SymlinkFile
 	}
+	path = gitLabCodeQualityRelativePath(path, basePath)
 	path = filepath.ToSlash(filepath.Clean(path))
 	return strings.TrimPrefix(path, "./")
+}
+
+func gitLabCodeQualityRelativePath(path, basePath string) string {
+	if path == "" || basePath == "" || !filepath.IsAbs(path) {
+		return path
+	}
+
+	absBase, err := filepath.Abs(basePath)
+	if err != nil {
+		return path
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(absBase, absPath)
+	if err != nil || !gitLabCodeQualityPathIsBelowBase(rel) {
+		return path
+	}
+	return rel
+}
+
+func gitLabCodeQualityPathIsBelowBase(rel string) bool {
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 func gitLabCodeQualityLine(f Finding) int {
@@ -76,8 +103,8 @@ func gitLabCodeQualityLine(f Finding) int {
 }
 
 func gitLabCodeQualityFingerprint(f Finding, path string, line int) string {
-	if f.Fingerprint != "" {
-		return f.Fingerprint
+	if f.Commit != "" {
+		return fmt.Sprintf("%s:%s:%s:%d", f.Commit, path, f.RuleID, line)
 	}
 	return fmt.Sprintf("%s:%s:%d", path, f.RuleID, line)
 }

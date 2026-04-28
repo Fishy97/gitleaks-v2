@@ -94,7 +94,9 @@ func TestDetectorAcceptsGitLabCodeQualityReportFormats(t *testing.T) {
 			cfg := Config(rootCmd)
 			detector := Detector(rootCmd, cfg, source)
 
-			assert.IsType(t, &report.GitLabCodeQualityReporter{}, detector.Reporter)
+			reporter, ok := detector.Reporter.(*report.GitLabCodeQualityReporter)
+			require.True(t, ok)
+			assert.Equal(t, source, reporter.BasePath)
 		})
 	}
 }

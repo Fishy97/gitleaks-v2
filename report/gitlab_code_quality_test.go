@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -87,4 +88,26 @@ func TestWriteGitLabCodeQualityFallbackFingerprint(t *testing.T) {
 	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
 	require.Len(t, got, 1)
 	assert.Equal(t, "demo/config.txt:demo-rule:7", got[0].Fingerprint)
+}
+
+func TestWriteGitLabCodeQualityUsesRelativePathFromScanRoot(t *testing.T) {
+	source := t.TempDir()
+	finding := Finding{
+		RuleID:      "demo-rule",
+		File:        filepath.Join(source, "src", "settings.py"),
+		StartLine:   7,
+		Fingerprint: filepath.Join(source, "src", "settings.py") + ":demo-rule:7",
+	}
+
+	var buf bytes.Buffer
+	reporter := GitLabCodeQualityReporter{
+		BasePath: source,
+	}
+	require.NoError(t, reporter.Write(testWriter{&buf}, []Finding{finding}))
+
+	var got []GitLabCodeQualityIssue
+	require.NoError(t, json.Unmarshal(buf.Bytes(), &got))
+	require.Len(t, got, 1)
+	assert.Equal(t, "src/settings.py", got[0].Location.Path)
+	assert.Equal(t, "src/settings.py:demo-rule:7", got[0].Fingerprint)
 }
